@@ -1,31 +1,76 @@
-deploy:
-  needs: build_push
-  runs-on: self-hosted
+name: CI-CD Kubernetes
 
-  steps:
-    - name: Vérification du contexte Kubernetes
-      run: |
-        kubectl config current-context
-        kubectl get nodes
+on:
+  push:
+    branches:
+      - main
 
-    - name: Déploiement de la nouvelle image
-      env:
-        IMAGE_REF: ghcr.io/jesuis127/ci-cd-demo:${{ github.sha }}
-      run: |
-        kubectl set image deployment/ci-cd-demo \
-          ci-cd-demo=$IMAGE_REF
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: jesuis127/ci-cd-demo
 
-    - name: Attente du Rolling Update
-      run: |
-        kubectl rollout status deployment/ci-cd-demo --timeout=120s
+jobs:
+  build_push:
+    runs-on: ubuntu-latest
 
-    - name: Rollback automatique en cas d’échec
-      if: failure()
-      run: |
-        echo "❌ Déploiement en échec → rollback"
-        kubectl rollout undo deployment/ci-cd-demo
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
 
-    - name: État final du déploiement
-      run: |
-        kubectl rollout history deployment/ci-cd-demo
-        kubectl get pods -l app=ci-cd-demo
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & Push image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./app
+          push: true
+          tags: |
+            ghcr.io/jesuis127/ci-cd-demo:${{ github.sha }}
+            ghcr.io/jesuis127/ci-cd-demo:latest
+
+  deploy:
+    needs: build_push
+    runs-on: self-hosted
+
+    steps:
+      - name: Vérification du cluster
+        run: |
+          kubectl config current-context
+          kubectl get nodes -o wide
+
+      - name: Déploiement de la nouvelle image
+        env:
+          IMAGE_REF: ghcr.io/jesuis127/ci-cd-demo:${{ github.sha }}
+        run: |
+          kubectl set image deployment/ci-cd-demo \
+            ci-cd-demo=$IMAGE_REF
+
+      # 👇 ICI : fusion de l'étape demandée
+      - name: Annoter le déploiement (change-cause)
+        run: |
+          kubectl annotate deployment/ci-cd-demo \
+            kubernetes.io/change-cause="Deploy image ghcr.io/jesuis127/ci-cd-demo:${{ github.sha }}" \
+            --overwrite
+
+      - name: Attente du Rolling Update
+        run: |
+          kubectl rollout status deployment/ci-cd-demo --timeout=120s
+
+      - name: Rollback automatique en cas d’échec
+        if: failure()
+        run: |
+          echo "❌ Déploiement en échec → rollback"
+          kubectl rollout undo deployment/ci-cd-demo
+
+      - name: État final du déploiement
+        run: |
+          kubectl rollout history deployment/ci-cd-demo
+          kubectl get pods -l app=ci-cd-demo -o wide
