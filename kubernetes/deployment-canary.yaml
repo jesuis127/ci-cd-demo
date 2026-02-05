@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ci-cd-demo-canary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ci-cd-demo
+      track: canary
+  template:
+    metadata:
+      labels:
+        app: ci-cd-demo
+        track: canary
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: ci-cd-demo
+          image: ghcr.io/jesuis127/ci-cd-demo:canary
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
