@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-canary
+  labels:
+    app: ci-cd-demo
+    track: canary
+spec:
+  replicas: {{ .Values.replicaCount.canary }}
+  selector:
+    matchLabels:
+      app: ci-cd-demo
+      track: canary
+  template:
+    metadata:
+      labels:
+        app: ci-cd-demo
+        track: canary
+    spec:
+      containers:
+        - name: ci-cd-demo
+          image: "{{ .Values.image.repository }}:canary"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 80
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
