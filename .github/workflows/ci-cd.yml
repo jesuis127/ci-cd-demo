@@ -27,6 +27,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Build + push avec 3 tags
       - name: Build & Push image
         uses: docker/build-push-action@v5
         with:
@@ -35,6 +36,7 @@ jobs:
           tags: |
             ghcr.io/jesuis127/ci-cd-demo:${{ github.sha }}
             ghcr.io/jesuis127/ci-cd-demo:latest
+            ghcr.io/jesuis127/ci-cd-demo:canary
 
   deploy:
     needs: build_push
@@ -46,14 +48,13 @@ jobs:
           kubectl config current-context
           kubectl get nodes -o wide
 
-      - name: Déploiement de la nouvelle image
+      - name: Déploiement de la nouvelle image (stable)
         env:
           IMAGE_REF: ghcr.io/jesuis127/ci-cd-demo:${{ github.sha }}
         run: |
           kubectl set image deployment/ci-cd-demo \
             ci-cd-demo=$IMAGE_REF
 
-      # 👇 ICI : fusion de l'étape demandée
       - name: Annoter le déploiement (change-cause)
         run: |
           kubectl annotate deployment/ci-cd-demo \
@@ -67,10 +68,11 @@ jobs:
       - name: Rollback automatique en cas d’échec
         if: failure()
         run: |
-          echo "❌ Déploiement en échec → rollback"
+          echo "Déploiement en échec → rollback"
           kubectl rollout undo deployment/ci-cd-demo
 
       - name: État final du déploiement
         run: |
           kubectl rollout history deployment/ci-cd-demo
           kubectl get pods -l app=ci-cd-demo -o wide
+
