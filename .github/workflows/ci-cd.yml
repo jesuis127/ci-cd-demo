@@ -1,4 +1,4 @@
-name: CI-CD Kubernetes
+name: CI – Build & Push Image
 
 on:
   push:
@@ -27,7 +27,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build + push avec 3 tags
       - name: Build & Push image
         uses: docker/build-push-action@v5
         with:
@@ -37,37 +36,3 @@ jobs:
             ghcr.io/jesuis127/ci-cd-demo:${{ github.sha }}
             ghcr.io/jesuis127/ci-cd-demo:latest
             ghcr.io/jesuis127/ci-cd-demo:canary
-
-  deploy:
-    needs: build_push
-    runs-on: self-hosted
-
-    steps:
-      - name: Vérification du cluster
-        run: |
-          kubectl config current-context
-          kubectl get nodes -o wide
-
-      - name: Déploiement de la nouvelle image (stable)
-        env:
-          IMAGE_REF: ghcr.io/jesuis127/ci-cd-demo:${{ github.sha }}
-        run: |
-          kubectl set image deployment/ci-cd-demo \
-            ci-cd-demo=$IMAGE_REF
-
-      - name: Annoter le déploiement (change-cause)
-        run: |
-          kubectl annotate deployment/ci-cd-demo \
-            kubernetes.io/change-cause="Deploy image ghcr.io/jesuis127/ci-cd-demo:${{ github.sha }}" \
-            --overwrite
-
-      - name: Attente du Rolling Update
-        run: |
-          kubectl rollout status deployment/ci-cd-demo --timeout=120s
-
-
-      - name: État final du déploiement
-        run: |
-          kubectl rollout history deployment/ci-cd-demo
-          kubectl get pods -l app=ci-cd-demo -o wide
-
